@@ -43,15 +43,15 @@ defmodule Elevator.Network.NodeDiscover do
   sends it to `Elevator.Network`.
   """
   def handle_info({:udp, _socket, _address, _port, packet}, state) do
-    packet = :erlang.binary_to_term(packet)
+    node = :erlang.binary_to_term(packet)
 
-    cond do
-      node?(to_string(packet)) and Node.self() != packet ->
-        Elevator.Network.new_node(packet)
-        :ok
+    if node?(to_string(node)) and Node.self() != node do
+      is_new = Elevator.Network.node_connect(node)
 
-      true ->
-        :ok
+      if is_new do
+        Node.connect(node)
+        Node.monitor(node, true)
+      end
     end
 
     {:noreply, state}
@@ -67,6 +67,12 @@ defmodule Elevator.Network.NodeDiscover do
     Process.send_after(@name, {:broadcast, next_broadcast}, next_broadcast)
 
     {:noreply, {socket, port}}
+  end
+
+  def handle_info({:nodedown, node}, state) do
+    Elevator.Network.node_disconnect(node)
+
+    {:noreply, state}
   end
 
   # Check if `string` matches the node name format.

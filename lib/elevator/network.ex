@@ -28,8 +28,19 @@ defmodule Elevator.Network do
     {:ok, state}
   end
 
-  def new_node(node) do
-    GenServer.cast(@name, {:new_node, node})
+  @doc """
+  A node connected, received from NodeDiscover.
+  Returns true if it was a new node, false otherwise. 
+  """
+  def node_connect(node) do
+    GenServer.call(@name, {:node_connect, node})
+  end
+
+  @doc """
+  A node disconnected, received from NodeDiscover.
+  """
+  def node_disconnect(node) do
+    GenServer.cast(@name, {:node_disconnect, node})
   end
 
   @doc """
@@ -40,8 +51,14 @@ defmodule Elevator.Network do
   end
 
   @impl true
-  def handle_cast({:new_node, node}, %State{connection_pool: connection_pool} = state) do
-    connection_pool = connection_pool_push(connection_pool, node)
+  def handle_call({:node_connect, node}, _from, %State{connection_pool: connection_pool} = state) do
+    {is_new, connection_pool} = connection_pool_push(connection_pool, node)
+    {:reply, is_new, %State{state | connection_pool: connection_pool}}
+  end
+
+  @impl true
+  def handle_cast({:node_disconnect, node}, %State{connection_pool: connection_pool} = state) do
+    connection_pool = connection_pool_pop(connection_pool, node)
     {:noreply, %State{state | connection_pool: connection_pool}}
   end
 
@@ -115,11 +132,11 @@ defmodule Elevator.Network do
     case Enum.all?(connection_pool, fn x -> x != node end) do
       true ->
         IO.puts("Network: Connecting to new node #{node}.")
-        Node.connect(node)
-        Enum.concat(connection_pool, [node])
+        connection_pool = Enum.concat(connection_pool, [node])
+        {true, connection_pool}
 
       false ->
-        connection_pool
+        {false, connection_pool}
     end
   end
 
