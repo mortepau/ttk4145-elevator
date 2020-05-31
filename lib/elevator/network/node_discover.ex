@@ -18,6 +18,7 @@ defmodule Elevator.Network.NodeDiscover do
     GenServer.start_link(__MODULE__, port, name: @name)
   end
 
+  @impl true
   @doc """
   Initialize the GenServer by starting the UDP server using `port` and
   create a distributed node with a unique name.
@@ -35,72 +36,84 @@ defmodule Elevator.Network.NodeDiscover do
     Process.send_after(@name, {:broadcast, @broadcast_interval}, @broadcast_interval)
     IO.puts("NodeDiscover: Initializion finished.")
 
-    {:ok, {socket, port}}
+    {:ok, %{socket: socket, port: port, connection_pool: [Node.self()]}}
   end
 
+  @impl true
   @doc """
-  Handle a UDP packet. Checks if the packet is a valid node name and
-  sends it to `Elevator.Network`.
+  Handle a UDP packet. If it contains a new node name establish a connection with it.
   """
-  def handle_info({:udp, _socket, _address, _port, packet}, state) do
+  def handle_info({:udp, _, _, _, packet}, %{connection_pool: connection_pool} = state) do
     node = :erlang.binary_to_term(packet)
 
-    if node?(to_string(node)) and Node.self() != node do
-      is_new = Elevator.Network.node_connect(node)
+    connection_pool = connection_pool_push(connection_pool, node)
 
-      if is_new do
-        Node.connect(node)
-        Node.monitor(node, true)
-      end
-    end
-
-    {:noreply, state}
+    {:noreply, %{state | connection_pool: connection_pool}}
   end
 
   @doc """
   Broadcast the node name on the UDP port, and create a delayed call for
   a new broadcast.
   """
-  def handle_info({:broadcast, next_broadcast}, {socket, port}) do
+  def handle_info({:broadcast, next_broadcast}, %{socket: socket, port: port} = state) do
     :gen_udp.send(socket, @broadcast_ip, port, :erlang.term_to_binary(Node.self()))
 
     Process.send_after(@name, {:broadcast, next_broadcast}, next_broadcast)
 
-    {:noreply, {socket, port}}
-  end
-
-  def handle_info({:nodedown, node}, state) do
-    Elevator.Network.node_disconnect(node)
-
     {:noreply, state}
   end
 
-  # Check if `string` matches the node name format.
-  defp node?(string) do
-    # Matches a node name consisting of 32 alphanumeric characters, a @ and 4 digits separated by .
-    pattern = ~r/^\b\w{32}\b@\d+\.\d+\.\d+\.\d+$/
-    Regex.match?(pattern, string)
+  @impl true
+  @doc """
+  Handle a node disconnect by popping it from `connection_pool`.
+  """
+  def handle_info({:nodedown, node}, %{connection_pool: connection_pool} = state) do
+    connection_pool = connection_pool_pop(connection_pool, node)
+    {:noreply, %{state | connection_pool: connection_pool}}
   end
 
-  # Convert the node name to an ip address on the format {#1, #2, #3, #4}.
-  # Assumes the node has a valid format.
-  def node_to_ip() do
-    Node.self()
-    |> to_string()
-    |> String.split("@")
-    |> Enum.at(1)
-    |> String.split(".")
-    |> Enum.map(fn x -> String.to_integer(x) end)
-    |> Enum.reduce({}, fn x, acc -> Tuple.append(acc, x) end)
+  # Add a node to `connection_pool` if isn't already present.
+  defp connection_pool_push(connection_pool, node) do
+    case node?(node) and Enum.all?(connection_pool, fn x -> x != node end) do
+      true ->
+        IO.puts("Network: Connecting to node #{node}.")
+        Node.connect(node)
+        Node.monitor(node, true)
+        Enum.concat(connection_pool, [node])
+
+      false ->
+        connection_pool
+    end
+  end
+
+  # Remove a node from `connection_pool` if it is present.
+  defp connection_pool_pop(connection_pool, node) do
+    case node?(node) and Enum.any?(connection_pool, fn conn -> conn == node end) do
+      true ->
+        IO.puts("Network: Disconnecting from node #{node}.")
+        Node.monitor(node, false)
+        Node.disconnect(node)
+        Enum.reject(connection_pool, fn conn -> conn == node end)
+
+      false ->
+        connection_pool
+    end
+  end
+
+  # Check if `atom` matches the node name format.
+  defp node?(atom) do
+    # Matches a node name consisting of 32 alphanumeric characters, a @ and 4 digits separated by .
+    pattern = ~r/^\b\w{32}\b@\d+\.\d+\.\d+\.\d+$/
+    Regex.match?(pattern, to_string(atom))
   end
 
   # Based on the works of Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)
   # Create a distributed node with a unique name. Set the cookie so nodes are visible to each other.
-  def start_node() do
+  defp start_node() do
     case get_ip() do
       {:ok, ip} ->
         short_name = UUID.uuid4(:hex)
-        ip = ip_to_string(ip)
+        ip = :inet.ntoa(ip) |> to_string()
         name = (short_name <> "@" <> ip) |> String.to_atom()
         Node.start(name, :longnames, 15_000)
         Node.set_cookie(:elevator_cookie)
@@ -111,21 +124,12 @@ defmodule Elevator.Network.NodeDiscover do
     end
   end
 
-  # Credited: Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)
-  # Retrieve all nodes currently connected.
-  defp all_nodes() do
-    case [Node.self() | Node.list()] do
-      [:nonode@nohost] -> {:error, :node_not_running}
-      nodes -> {:ok, nodes}
-    end
-  end
-
   # Based on the works of Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)
   # Get the IP address.
   defp get_ip() do
     ports = Enum.to_list(8091..8100)
     opts = [active: false, broadcast: true]
-    packet = 'find ip'
+    packet = []
     {port, socket} = open_udp(ports, opts)
     :ok = :gen_udp.send(socket, {255, 255, 255, 255}, port, packet)
 
@@ -137,12 +141,6 @@ defmodule Elevator.Network.NodeDiscover do
 
     :gen_udp.close(socket)
     {status, ip}
-  end
-
-  # Credited: Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)
-  # Convert the IP address to a string.
-  defp ip_to_string(ip) do
-    :inet.ntoa(ip) |> to_string()
   end
 
   # Raise an error if trying to open a UDP port with no port specified.
