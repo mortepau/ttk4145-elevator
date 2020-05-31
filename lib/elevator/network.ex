@@ -6,14 +6,12 @@ defmodule Elevator.Network do
 
   alias Elevator.{Network.State, Network.Packet, OrderController, OrderController.Order}
 
-  @name Network
-
   @doc """
   Function to be used by the Supervisor to start a linked connection.
   """
   def start_link(_) do
     IO.puts("Network: Starting GenServer.")
-    GenServer.start_link(__MODULE__, [], name: @name)
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
   @impl true
@@ -38,14 +36,14 @@ defmodule Elevator.Network do
   A new order is received from OrderController. Send to GenServer as a cast.
   """
   def new_order(%Order{} = order) do
-    GenServer.cast(@name, {:new_order, order})
+    GenServer.cast(__MODULE__, {:new_order, order})
   end
 
   @doc """
   An order is completed. Send to GenServer as a cast.
   """
   def complete_order(%Order{} = order) do
-    GenServer.cast(@name, {:complete_order, order})
+    GenServer.cast(__MODULE__, {:complete_order, order})
   end
 
   @impl true
@@ -60,8 +58,8 @@ defmodule Elevator.Network do
           Packet.new() |> Packet.update([:source, :target, :payload], [Node.self(), node, order])
 
         IO.puts("Network: Sending order (#{packet.id}) to #{node}.")
-        Process.send({@name, node}, {:new_order, packet}, [:noconnect])
-        Process.send_after(@name, {:timeout, packet}, state.timeouts.packet)
+        Process.send({__MODULE__, node}, {:new_order, packet}, [:noconnect])
+        Process.send_after(__MODULE__, {:timeout, packet}, state.timeouts.packet)
         packet
       end
 
@@ -95,7 +93,7 @@ defmodule Elevator.Network do
   @impl true
   def handle_info({:timeout, %Packet{} = packet}, %State{pending: pending} = state) do
     if Enum.any?(pending, fn p -> p.id == packet.id end) do
-      Process.send({@name, packet.target}, {:new_order, packet}, [:noconnect])
+      Process.send({__MODULE__, packet.target}, {:new_order, packet}, [:noconnect])
     end
 
     {:noreply, %State{state | pending: pending}}
@@ -120,7 +118,7 @@ defmodule Elevator.Network do
   # Acknowledge a packet with a given `id`.
   defp acknowledge_packet(%Packet{id: id, source: source}) do
     IO.puts("Network: Acknowledge order with id #{id}.")
-    Process.send({@name, source}, {:acknowledge, id}, [:noconnect])
+    Process.send({__MODULE__, source}, {:acknowledge, id}, [:noconnect])
   end
 
   # Credited: Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)

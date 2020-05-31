@@ -5,7 +5,6 @@ defmodule Elevator.Network.NodeDiscover do
   """
   use GenServer
 
-  @name NodeDiscover
   @broadcast_ip {255, 255, 255, 255}
   @broadcast_interval 1_000
 
@@ -15,7 +14,7 @@ defmodule Elevator.Network.NodeDiscover do
   """
   def start_link(port \\ 8080) do
     IO.puts("NodeDiscover: Starting GenServer.")
-    GenServer.start_link(__MODULE__, port, name: @name)
+    GenServer.start_link(__MODULE__, port, name: __MODULE__)
   end
 
   @impl true
@@ -33,7 +32,7 @@ defmodule Elevator.Network.NodeDiscover do
     IO.puts("NodeDiscover: Starting node.")
     start_node()
     IO.puts("NodeDiscover: Node started.")
-    Process.send_after(@name, {:broadcast, @broadcast_interval}, @broadcast_interval)
+    Process.send_after(__MODULE__, {:broadcast, @broadcast_interval}, @broadcast_interval)
     IO.puts("NodeDiscover: Initializion finished.")
 
     {:ok, %{socket: socket, port: port, connection_pool: [Node.self()]}}
@@ -58,7 +57,7 @@ defmodule Elevator.Network.NodeDiscover do
   def handle_info({:broadcast, next_broadcast}, %{socket: socket, port: port} = state) do
     :gen_udp.send(socket, @broadcast_ip, port, :erlang.term_to_binary(Node.self()))
 
-    Process.send_after(@name, {:broadcast, next_broadcast}, next_broadcast)
+    Process.send_after(__MODULE__, {:broadcast, next_broadcast}, next_broadcast)
 
     {:noreply, state}
   end
