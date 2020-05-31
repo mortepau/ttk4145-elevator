@@ -35,43 +35,17 @@ defmodule Elevator.Network do
   end
 
   @doc """
-  A node connected, received from NodeDiscover. Send to GenServer as a call.
-  Returns true if it was a new node, false otherwise. 
-  """
-  def node_connect(node) do
-    GenServer.cast(@name, {:node_connect, node})
-  end
-
-  @doc """
-  A node disconnected, received from NodeDiscover. Send to GenServer as a cast.
-  """
-  def node_disconnect(node) do
-    GenServer.cast(@name, {:node_disconnect, node})
-  end
-
-  @doc """
   A new order is received from OrderController. Send to GenServer as a cast.
   """
   def new_order(%Order{} = order) do
     GenServer.cast(@name, {:new_order, order})
   end
 
-  @impl true
   @doc """
-  Handle a node connection by pushing it to `connection_pool`.
+  An order is completed. Send to GenServer as a cast.
   """
-  def handle_cast({:node_connect, node}, %State{connection_pool: connection_pool} = state) do
-    connection_pool = connection_pool_push(connection_pool, node)
-    {:noreply, %State{state | connection_pool: connection_pool}}
-  end
-
-  @impl true
-  @doc """
-  Handle a node disconnect by popping it from `connection_pool`.
-  """
-  def handle_cast({:node_disconnect, node}, %State{connection_pool: connection_pool} = state) do
-    connection_pool = connection_pool_pop(connection_pool, node)
-    {:noreply, %State{state | connection_pool: connection_pool}}
+  def complete_order(%Order{} = order) do
+    GenServer.cast(@name, {:complete_order, order})
   end
 
   @impl true
@@ -141,31 +115,6 @@ defmodule Elevator.Network do
   def handle_info({:complete_order, order}, %State{} = state) do
     OrderController.complete_order(order)
     {:noreply, state}
-  end
-
-  # Add a node to `connection_pool` if isn't already present.
-  defp connection_pool_push(connection_pool, node) do
-    case Enum.all?(connection_pool, fn x -> x != node end) do
-      true ->
-        IO.puts("Network: Connecting to new node #{node}.")
-        Enum.concat(connection_pool, [node])
-
-      false ->
-        connection_pool
-    end
-  end
-
-  # Remove a node from `connection_pool` if it is present.
-  defp connection_pool_pop(connection_pool, node) do
-    case Enum.any?(connection_pool, fn conn -> conn == node end) do
-      true ->
-        IO.puts("Network: Disconnecting from node #{node}.")
-        Node.disconnect(node)
-        Enum.reject(connection_pool, fn conn -> conn == node end)
-
-      false ->
-        connection_pool
-    end
   end
 
   # Acknowledge a packet with a given `id`.
