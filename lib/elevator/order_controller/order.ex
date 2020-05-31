@@ -1,5 +1,5 @@
 defmodule Elevator.OrderController.Order do
-  defstruct [:id, :floor, :direction, :owner]
+  defstruct [:floor, :direction, :owner]
 
   @directions [:hall_up, :hall_down, :cab]
   @floors 0..4
@@ -7,15 +7,16 @@ defmodule Elevator.OrderController.Order do
   alias Elevator.OrderController.Order
 
   def new() do
-    %Order{id: make_ref()}
+    %Order{}
   end
 
-  def assign_id(order = %Order{}) do
-    %Order{order | id: make_ref()}
+  def update(%Order{} = order, keys, values) when is_list(keys) and is_list(values) do
+    Enum.zip(keys, values) |> Map.new() |> (fn x -> Map.merge(order, x) end).()
   end
 
   def valid?(order = %Order{}) do
-    Enum.all?(Map.values(order), fn v -> v != nil end) and check_direction(order) and check_floor(order)
+    Enum.all?(Map.values(order), fn v -> v != nil end) and check_direction(order) and
+      check_floor(order)
   end
 
   defp check_direction(order = %Order{}) do
