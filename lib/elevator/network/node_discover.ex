@@ -43,10 +43,6 @@ defmodule Elevator.Network.NodeDiscover do
   sends it to `Elevator.Network`.
   """
   def handle_info({:udp, _socket, _address, _port, packet}, state) do
-    IO.puts(
-      "NodeDiscover(#{Node.self() |> to_string() |> String.slice(0, 10)}...): Packet received."
-    )
-
     packet = :erlang.binary_to_term(packet)
 
     cond do
@@ -66,10 +62,6 @@ defmodule Elevator.Network.NodeDiscover do
   a new broadcast.
   """
   def handle_info({:broadcast, next_broadcast}, {socket, port}) do
-    IO.puts(
-      "NodeDiscover(#{Node.self() |> to_string() |> String.slice(0, 10)}...): Broadcasting node."
-    )
-
     :gen_udp.send(socket, @broadcast_ip, port, :erlang.term_to_binary(Node.self()))
 
     Process.send_after(@name, {:broadcast, next_broadcast}, next_broadcast)
