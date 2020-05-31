@@ -8,12 +8,18 @@ defmodule Elevator.Network do
 
   @name Network
 
+  @doc """
+  Function to be used by the Supervisor to start a linked connection.
+  """
   def start_link(_) do
     IO.puts("Network: Starting GenServer.")
     GenServer.start_link(__MODULE__, [], name: @name)
   end
 
   @impl true
+  @doc """
+  Initialize the GenServer by setting its state to the `Elevator.Network.State` struct.
+  """
   def init(_) do
     IO.puts("Network: Initializing GenServer.")
 
@@ -51,12 +57,19 @@ defmodule Elevator.Network do
   end
 
   @impl true
+  @doc """
+  Handle a node connection by pushing it to `connection_pool` and reply to the caller
+  with a boolean representing if it was added or not.
+  """
   def handle_call({:node_connect, node}, _from, %State{connection_pool: connection_pool} = state) do
     {is_new, connection_pool} = connection_pool_push(connection_pool, node)
     {:reply, is_new, %State{state | connection_pool: connection_pool}}
   end
 
   @impl true
+  @doc """
+  Handle a node disconnect by popping it from `connection_pool`.
+  """
   def handle_cast({:node_disconnect, node}, %State{connection_pool: connection_pool} = state) do
     connection_pool = connection_pool_pop(connection_pool, node)
     {:noreply, %State{state | connection_pool: connection_pool}}
@@ -65,7 +78,7 @@ defmodule Elevator.Network do
   @impl true
   @doc """
   Distribute the new order to all connected nodes.
-  Create a timer 
+  Create a timer for each packet sent.
   """
   def handle_cast({:new_order, %Order{} = order}, %State{pending: pending} = state) do
     new_pending =
@@ -85,8 +98,7 @@ defmodule Elevator.Network do
 
   @impl true
   @doc """
-  Handle the new order by sending it to the OrderController and sending
-  an acknowledgement to the sender.
+  Handle the new order by sending it to the OrderController and sending an acknowledgement to the sender.
   """
   def handle_info({:new_order, %Packet{} = packet}, %State{pending: pending} = state) do
     IO.puts("New order received")
@@ -132,6 +144,8 @@ defmodule Elevator.Network do
     {:noreply, state}
   end
 
+  # Add a node to `connection_pool` if isn't already present.
+  # Return a boolean representing if it was added or not.
   defp connection_pool_push(connection_pool, node) do
     case Enum.all?(connection_pool, fn x -> x != node end) do
       true ->
@@ -144,6 +158,7 @@ defmodule Elevator.Network do
     end
   end
 
+  # Remove a node from `connection_pool` if it is present.
   defp connection_pool_pop(connection_pool, node) do
     case Enum.any?(connection_pool, fn conn -> conn == node end) do
       true ->
@@ -156,12 +171,14 @@ defmodule Elevator.Network do
     end
   end
 
+  # Acknowledge a packet with a given `id`.
   defp acknowledge_packet(%Packet{id: id, source: source}) do
     IO.puts("Network: Acknowledge order with id #{id}.")
     Process.send({@name, source}, {:acknowledge, id}, [:noconnect])
   end
 
   # Credited: Jostein Løwer. https://github.com/jostlowe/kokeplata/tree/master/lib (27.05.20)
+  # Retrieve all nodes currently connected.
   defp all_nodes() do
     case [Node.self() | Node.list()] do
       [:nonode@nohost] -> {:error, :node_not_running}
