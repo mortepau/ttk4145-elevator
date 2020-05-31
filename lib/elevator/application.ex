@@ -8,6 +8,7 @@ defmodule Elevator.Application do
 
   def start(_type, _args) do
     children = [
+      {Elevator.Driver, []},
       {Elevator.OrderController, []},
       {Elevator.Network.NodeDiscover, @broadcast_port},
       {Elevator.Network, Enum.to_list(@ports)}
