@@ -20,7 +20,7 @@ defmodule Elevator.Network do
     state = %State{
       connection_pool: [],
       pending: [],
-      timeouts: %{order: 15_000, packet: 250, connection: 1_000}
+      timeouts: %{order: 15_000, packet: 250}
     }
 
     IO.puts("Network: Initialization finished.")
@@ -29,7 +29,7 @@ defmodule Elevator.Network do
   end
 
   @doc """
-  A node connected, received from NodeDiscover.
+  A node connected, received from NodeDiscover. Send to GenServer as a call.
   Returns true if it was a new node, false otherwise. 
   """
   def node_connect(node) do
@@ -37,14 +37,14 @@ defmodule Elevator.Network do
   end
 
   @doc """
-  A node disconnected, received from NodeDiscover.
+  A node disconnected, received from NodeDiscover. Send to GenServer as a cast.
   """
   def node_disconnect(node) do
     GenServer.cast(@name, {:node_disconnect, node})
   end
 
   @doc """
-  New order received from OrderController. Send to GenServer as a cast.
+  A new order is received from OrderController. Send to GenServer as a cast.
   """
   def new_order(%Order{} = order) do
     GenServer.cast(@name, {:new_order, order})
@@ -70,16 +70,14 @@ defmodule Elevator.Network do
   def handle_cast({:new_order, %Order{} = order}, %State{pending: pending} = state) do
     new_pending =
       for node <- all_nodes() do
-        packet = Packet.new() |> Packet.update([:source, :payload], [Node.self(), order])
+        packet =
+          Packet.new() |> Packet.update([:source, :target, :payload], [Node.self(), node, order])
 
         IO.puts("Network: Sending order (#{packet.id}) to #{node}.")
         Process.send({@name, node}, {:new_order, packet}, [:noconnect])
-        # Create a timer for each order and append to pending orders
-        Process.send_after(@name, {:timeout, packet}, state.timeouts.order)
+        Process.send_after(@name, {:timeout, packet}, state.timeouts.packet)
         packet
       end
-
-    IO.inspect(new_pending)
 
     pending = pending ++ new_pending
     {:noreply, %State{state | pending: pending}}
@@ -87,16 +85,19 @@ defmodule Elevator.Network do
 
   @impl true
   @doc """
-  Handle the new order by sending it to the OrderController. Create a timer
-  and expect a reply
+  Handle the new order by sending it to the OrderController and sending
+  an acknowledgement to the sender.
   """
   def handle_info({:new_order, %Packet{} = packet}, %State{pending: pending} = state) do
     IO.puts("New order received")
     OrderController.new_order(packet.payload)
-    acknowledge_packet(:new, packet)
+    acknowledge_packet(packet)
     {:noreply, %State{state | pending: pending}}
   end
 
+  @doc """
+  Handle an acknowledgement received from the network.
+  """
   def handle_info({:acknowledge, id}, %State{pending: pending} = state) do
     IO.puts("Network: Packet #{id} acknowledged.")
     pending = Enum.reject(pending, fn packet -> packet.id == id end)
@@ -104,12 +105,15 @@ defmodule Elevator.Network do
   end
 
   @doc """
-  Handle a timeout message. Remove the timed out connection.
+  Handle a packet timeut. Resend the packet to the target.
   """
   @impl true
-  def handle_info({:timeout, node}, %State{connection_pool: connection_pool} = state) do
-    connection_pool = connection_pool_pop(connection_pool, node)
-    {:noreply, %State{state | connection_pool: connection_pool}}
+  def handle_info({:timeout, %Packet{} = packet}, %State{pending: pending} = state) do
+    if Enum.any?(pending, fn p -> p.id == packet.id end) do
+      Process.send({@name, packet.target}, {:new_order, packet}, [:noconnect])
+    end
+
+    {:noreply, %State{state | pending: pending}}
   end
 
   @doc """
@@ -152,7 +156,7 @@ defmodule Elevator.Network do
     end
   end
 
-  defp acknowledge_packet(:new, %Packet{id: id, source: source}) do
+  defp acknowledge_packet(%Packet{id: id, source: source}) do
     IO.puts("Network: Acknowledge order with id #{id}.")
     Process.send({@name, source}, {:acknowledge, id}, [:noconnect])
   end

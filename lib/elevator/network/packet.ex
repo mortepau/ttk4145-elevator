@@ -13,7 +13,7 @@ defmodule Elevator.Network.Packet do
   `payload`: Packet content
   """
 
-  defstruct [:id, :source, :payload]
+  defstruct [:id, :source, :target, :payload]
 
   alias Elevator.Network.Packet
 
