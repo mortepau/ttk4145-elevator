@@ -64,7 +64,7 @@ defmodule Elevator.Network.NodeDiscover do
 
   @impl true
   @doc """
-  Handle a node disconnect by popping it from `connection_pool`.
+  Handle a node disconnect by removing it from `connection_pool`.
   """
   def handle_info({:nodedown, node}, %{connection_pool: connection_pool} = state) do
     connection_pool = connection_pool_pop(connection_pool, node)
