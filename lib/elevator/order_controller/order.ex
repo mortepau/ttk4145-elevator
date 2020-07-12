@@ -15,15 +15,15 @@ defmodule Elevator.OrderController.Order do
   end
 
   def valid?(order = %Order{}) do
-    Enum.all?(Map.values(order), fn v -> v != nil end) and check_direction(order) and
-      check_floor(order)
+    Enum.all?(Map.values(order), fn v -> v != nil end) and valid_direction?(order) and
+      valid_floor?(order)
   end
 
-  defp check_direction(order = %Order{}) do
+  defp valid_direction?(order = %Order{}) do
     Enum.any?(@directions, fn dir -> dir == order.direction end)
   end
 
-  defp check_floor(order = %Order{}) do
+  defp valid_floor?(order = %Order{}) do
     Enum.any?(@floors, fn floor -> floor == order.floor end)
   end
 end
