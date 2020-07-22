@@ -25,7 +25,7 @@ defmodule Elevator.Watchdog.Node do
 
   def handle_cast(:poll, %{floor: floor, button: button, timeout: timeout} = state) do
     button_state = Elevator.Driver.get_order_button_state(floor, button)
-    if button_state == 1 do
+    if button_state do
       order = Order.new() |> Order.update([:floor, :button], [floor, button])
       Elevator.OrderController.new_order(order)
     end

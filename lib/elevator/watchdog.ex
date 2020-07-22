@@ -22,8 +22,7 @@ defmodule Elevator.Watchdog do
       end
       |> List.flatten()
 
-    opts = [strategy: :one_for_one, name: Elevator.Watchdog.Supervisor]
-    Supervisor.init(children, opts)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
   def init(_args) do
