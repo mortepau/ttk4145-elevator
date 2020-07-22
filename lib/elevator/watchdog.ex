@@ -10,6 +10,9 @@ defmodule Elevator.Watchdog do
     Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @doc """
+  Initialize the Supervision tree by creating a child for each combination of {`floor`, `button`}.
+  """
   def init([%{"floors" => floors, "buttons" => buttons}]) do
     IO.puts("#{__MODULE__}: Initializing Supervisor")
     children = 

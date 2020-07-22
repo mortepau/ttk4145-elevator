@@ -5,6 +5,7 @@ defmodule Elevator.Watchdog.Node do
 
   use GenServer
 
+  alias Elevator.Watchdog.State
   alias Elevator.OrderController.Order
 
   def start_link(%{"floor" => floor, "button" => button} = opts) do
@@ -16,23 +17,27 @@ defmodule Elevator.Watchdog.Node do
       Process.sleep(timeout)
       poll(floor, button)
     end)
-    {:ok, %{floor: floor, button: button, timeout: timeout}}
+    {:ok, %State{floor: floor, button: button, timeout: timeout}}
   end
 
   def poll(floor, button) do
     GenServer.cast(create_name(floor, button), :poll)
   end
 
-  def handle_cast(:poll, %{floor: floor, button: button, timeout: timeout} = state) do
-    button_state = Elevator.Driver.get_order_button_state(floor, button)
-    if button_state do
-      order = Order.new() |> Order.update([:floor, :button], [floor, button])
+  @doc """
+  Read the state of the order button for the given {`floor`, `button`}
+  combination and issue a new order if button is pressed.
+  """
+  def handle_cast(:poll, %State{} = state) do
+    button_state = Elevator.Driver.get_order_button_state(state.floor, state.button)
+    if button_state == 1 do
+      order = Order.new() |> Order.update([:floor, :direction], [state.floor, state.button])
       Elevator.OrderController.new_order(order)
     end
 
     spawn(fn ->
-      Process.sleep(timeout)
-      poll(floor, button)
+      Process.sleep(state.timeout)
+      poll(state.floor, state.button)
     end)
 
     {:noreply, state}
