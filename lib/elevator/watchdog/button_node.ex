@@ -1,4 +1,4 @@
-defmodule Elevator.Watchdog.Node do
+defmodule Elevator.Watchdog.ButtonNode do
   @moduledoc """
   Module polling information from a single floor and button combination.
   """
