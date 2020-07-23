@@ -6,6 +6,8 @@ defmodule Elevator.StateMachine do
 
   use GenServer
 
+  require Logger
+
   alias Elevator.StateMachine.{State, Timer}
   alias Elevator.OrderController.Order
   alias Elevator.Driver
@@ -46,8 +48,6 @@ defmodule Elevator.StateMachine do
   end
 
   def handle_cast({:new_order, %Order{} = order}, %State{orders: orders} = state) do
-    IO.puts("New order: #{order}")
-    IO.puts("Current orders: #{orders}")
     {:noreply, state}
   end
 
@@ -61,7 +61,7 @@ defmodule Elevator.StateMachine do
           # Do nothing, between floors
           state
         new_floor != state.floor ->
-          IO.puts("Arrived at new floor")
+          Logger.debug("Arrived at new floor #{new_floor}")
           floor = new_floor
           orders = update_orders(state.orders, floor)
           Driver.set_floor_indicator(floor)
@@ -89,18 +89,18 @@ defmodule Elevator.StateMachine do
   end
 
   def handle_info(:timeout, %State{} = state) do
-    IO.puts("#{__MODULE__}: Timer timed out")
+    Logger.debug("Timer timeout")
     close_door() 
     {:noreply, state}
   end
 
   defp start_between_floors() do
-    IO.puts("Started between floors: Going down")
+    Logger.info("Starting between floors")
     :down
   end
 
   defp update_orders(orders, floor) do
-    IO.puts("Updating orders")
+    Logger.debug("Updating orders")
     Enum.filter(orders, fn order -> order.floor != floor end)
   end
 

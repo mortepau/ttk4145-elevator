@@ -4,13 +4,15 @@ defmodule Elevator.Network do
   """
   use GenServer
 
+  require Logger
+
   alias Elevator.{Network.State, Network.Packet, OrderController, OrderController.Order}
 
   @doc """
   Function to be used by the Supervisor to start a linked connection.
   """
   def start_link(_) do
-    IO.puts("Network: Starting GenServer.")
+    Logger.info("Starting GenServer")
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
@@ -19,7 +21,7 @@ defmodule Elevator.Network do
   Initialize the GenServer by setting its state to the `Elevator.Network.State` struct.
   """
   def init(_) do
-    IO.puts("Network: Initializing GenServer.")
+    Logger.info("Initializing GenServer")
 
     state = %State{
       connection_pool: [],
@@ -27,7 +29,7 @@ defmodule Elevator.Network do
       timeouts: %{order: 15_000, packet: 250}
     }
 
-    IO.puts("Network: Initialization finished.")
+    Logger.info("Initialization finished")
 
     {:ok, state}
   end
@@ -57,7 +59,7 @@ defmodule Elevator.Network do
         packet =
           Packet.new() |> Packet.update([:source, :target, :payload], [Node.self(), node, order])
 
-        IO.puts("Network: Sending order (#{packet.id}) to #{node}.")
+        Logger.debug("Sending order (#{packet.id}) to #{node}")
         Process.send({__MODULE__, node}, {:new_order, packet}, [:noconnect])
         Process.send_after(__MODULE__, {:timeout, packet}, state.timeouts.packet)
         packet
@@ -72,7 +74,7 @@ defmodule Elevator.Network do
   Handle the new order by sending it to the OrderController and sending an acknowledgement to the sender.
   """
   def handle_info({:new_order, %Packet{} = packet}, %State{pending: pending} = state) do
-    IO.puts("New order received")
+    Logger.debug("New order received")
     OrderController.new_order(packet.payload)
     acknowledge_packet(packet)
     {:noreply, %State{state | pending: pending}}
@@ -82,7 +84,7 @@ defmodule Elevator.Network do
   Handle an acknowledgement received from the network.
   """
   def handle_info({:acknowledge, id}, %State{pending: pending} = state) do
-    IO.puts("Network: Packet #{id} acknowledged.")
+    Logger.debug("Packet #{id} acknowledged")
     pending = Enum.reject(pending, fn packet -> packet.id == id end)
     {:noreply, %State{state | pending: pending}}
   end
@@ -117,7 +119,7 @@ defmodule Elevator.Network do
 
   # Acknowledge a packet with a given `id`.
   defp acknowledge_packet(%Packet{id: id, source: source}) do
-    IO.puts("Network: Acknowledge order with id #{id}.")
+    Logger.debug("Acknowledge order with id #{id}")
     Process.send({__MODULE__, source}, {:acknowledge, id}, [:noconnect])
   end
 

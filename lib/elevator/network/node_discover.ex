@@ -5,6 +5,8 @@ defmodule Elevator.Network.NodeDiscover do
   """
   use GenServer
 
+  require Logger
+
   @broadcast_ip {255, 255, 255, 255}
   @broadcast_interval 1_000
 
@@ -13,7 +15,7 @@ defmodule Elevator.Network.NodeDiscover do
   Input is the port for the UDP server.
   """
   def start_link(port \\ 8080) do
-    IO.puts("NodeDiscover: Starting GenServer.")
+    Logger.info("Starting GenServer")
     GenServer.start_link(__MODULE__, port, name: __MODULE__)
   end
 
@@ -23,17 +25,17 @@ defmodule Elevator.Network.NodeDiscover do
   create a distributed node with a unique name.
   """
   def init(port) do
-    IO.puts("NodeDiscover: Initializing GenServer.")
+    Logger.info("Initializing GenServer")
     opts = [:binary, active: true, broadcast: true, reuseaddr: true]
-    IO.puts("NodeDiscover: Starting UDP broadcasting.")
+    Logger.info("Starting UDP broadcasting")
     {:ok, socket} = :gen_udp.open(port, opts)
-    IO.puts("NodeDiscover: UDP broadcasting started on port: #{port}.")
+    Logger.info("UDP broadcasting started on port #{port}")
 
-    IO.puts("NodeDiscover: Starting node.")
+    Logger.debug("Starting Node")
     start_node()
-    IO.puts("NodeDiscover: Node started.")
+    Logger.debug("Node started")
     Process.send_after(__MODULE__, {:broadcast, @broadcast_interval}, @broadcast_interval)
-    IO.puts("NodeDiscover: Initializion finished.")
+    Logger.info("Initialization finished")
 
     {:ok, %{socket: socket, port: port, connection_pool: [Node.self()]}}
   end
@@ -75,7 +77,7 @@ defmodule Elevator.Network.NodeDiscover do
   defp connection_pool_push(connection_pool, node) do
     case node?(node) and Enum.all?(connection_pool, fn x -> x != node end) do
       true ->
-        IO.puts("Network: Connecting to node #{node}.")
+        Logger.debug("Connecting to Node #{node}")
         Node.connect(node)
         Node.monitor(node, true)
         Enum.concat(connection_pool, [node])
@@ -89,7 +91,7 @@ defmodule Elevator.Network.NodeDiscover do
   defp connection_pool_pop(connection_pool, node) do
     case node?(node) and Enum.any?(connection_pool, fn conn -> conn == node end) do
       true ->
-        IO.puts("Network: Disconnecting from node #{node}.")
+        Logger.debug("Disconnecting from Node #{node}")
         Node.monitor(node, false)
         Node.disconnect(node)
         Enum.reject(connection_pool, fn conn -> conn == node end)
