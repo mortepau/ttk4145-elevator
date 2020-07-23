@@ -13,6 +13,8 @@ defmodule Elevator.Application do
     children = [
       {Elevator.Driver, []},
       {Elevator.Watchdog, [%{"floors" => @floors, "buttons" => @buttons}]},
+      {Elevator.StateMachine.Timer, []},
+      {Elevator.StateMachine, []},
       {Elevator.OrderController, []},
       {Elevator.Network.NodeDiscover, @broadcast_port},
       {Elevator.Network, Enum.to_list(@ports)}
