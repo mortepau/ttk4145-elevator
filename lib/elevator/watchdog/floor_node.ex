@@ -14,6 +14,7 @@ defmodule Elevator.Watchdog.FloorNode do
       Process.sleep(timeout)
       poll()
     end)
+
     {:ok, timeout}
   end
 
@@ -27,10 +28,12 @@ defmodule Elevator.Watchdog.FloorNode do
   """
   def handle_cast(:poll, timeout) do
     floor_state = Elevator.Driver.get_floor_sensor_state()
+
     case floor_state do
       :between_floors ->
         Elevator.StateMachine.arrive_at_floor(-1)
-      floor -> 
+
+      floor ->
         Elevator.StateMachine.arrive_at_floor(floor)
     end
 

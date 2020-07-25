@@ -17,6 +17,7 @@ defmodule Elevator.Watchdog.ButtonNode do
       Process.sleep(timeout)
       poll(floor, button)
     end)
+
     {:ok, %State{floor: floor, button: button, timeout: timeout}}
   end
 
@@ -30,8 +31,9 @@ defmodule Elevator.Watchdog.ButtonNode do
   """
   def handle_cast(:poll, %State{} = state) do
     button_state = Elevator.Driver.get_order_button_state(state.floor, state.button)
+
     if button_state == 1 do
-      order = Order.new() |> Order.update([:floor, :direction], [state.floor, state.button])
+      order = Order.new() |> Order.update([:floor, :button], [state.floor, state.button])
       Elevator.OrderController.new_order(order)
     end
 
@@ -44,6 +46,9 @@ defmodule Elevator.Watchdog.ButtonNode do
   end
 
   defp create_name(floor, button) do
-    String.to_atom(Atom.to_string(__MODULE__) <> "." <> Integer.to_string(floor) <> "." <> Atom.to_string(button))
+    String.to_atom(
+      Atom.to_string(__MODULE__) <>
+        "." <> Integer.to_string(floor) <> "." <> Atom.to_string(button)
+    )
   end
 end

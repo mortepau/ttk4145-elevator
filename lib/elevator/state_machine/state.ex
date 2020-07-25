@@ -1,3 +1,3 @@
 defmodule Elevator.StateMachine.State do
-  defstruct [:floor, :direction, :behaviour, :orders, :lights]
+  defstruct [:floor, :direction, :behaviour, :orders, :timeout_door]
 end

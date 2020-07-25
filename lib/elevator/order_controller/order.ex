@@ -1,7 +1,7 @@
 defmodule Elevator.OrderController.Order do
-  defstruct [:floor, :direction, :owner]
+  defstruct [:floor, :button, :owner]
 
-  @directions [:hall_up, :hall_down, :cab]
+  @buttons [:hall_up, :hall_down, :cab]
   @floors 0..4
 
   alias Elevator.OrderController.Order
@@ -15,15 +15,15 @@ defmodule Elevator.OrderController.Order do
   end
 
   def valid?(order = %Order{}) do
-    Enum.all?(Map.values(order), fn v -> v != nil end) and valid_direction?(order) and
+    Enum.all?(Map.values(order), fn v -> v != nil end) and valid_button?(order) and
       valid_floor?(order)
   end
 
-  defp valid_direction?(order = %Order{}) do
-    Enum.any?(@directions, fn dir -> dir == order.direction end)
+  defp valid_button?(%Order{button: button}) do
+    button in @buttons
   end
 
-  defp valid_floor?(order = %Order{}) do
-    Enum.any?(@floors, fn floor -> floor == order.floor end)
+  defp valid_floor?(%Order{floor: floor}) do
+    floor in @floors
   end
 end
